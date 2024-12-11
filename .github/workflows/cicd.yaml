@@ -28,7 +28,7 @@ jobs:
                 if [ -d "go-be" ]; then
                   rm -rf "go-be"
                 fi
-                git clone https://github.com/ScissorhandsMetu/go-be.git "${{ github.event.repository.name }}"
+                git clone https://github.com/ScissorhandsMetu/go-be.git
                 
                 if docker service ls | grep -q "${{ github.event.repository.name }}"; then
                     docker service rm ${{ github.event.repository.name }}
