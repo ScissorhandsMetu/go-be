@@ -1,0 +1,48 @@
+name: Deploy with SSH and Password
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+        - name: Deploy via SSH with Password
+          uses: appleboy/ssh-action@v0.1.6
+          with:
+            host: ${{ secrets.SSH_HOST }}
+            username: ${{ secrets.SSH_USER }}
+            password: ${{ secrets.SSH_PASSWORD }}
+            port: 22
+            script: |
+                # Define variables
+                REPO_NAME=$(basename -s .git $(git config --get remote.origin.url))
+                WORK_DIR="/root/"
+                
+                
+                # Pull the repository
+                cd $WORK_DIR
+                if [ -d "${{ github.event.repository.name }}" ]; then
+                  rm -rf "${{ github.event.repository.name }}"
+                fi
+                git clone https://github.com/${{ github.event.repository.name }} "${{ github.event.repository.name }}"
+                
+                # Build the Docker image
+                cd "${{ github.event.repository.name }}"
+                docker build -t "${{ github.event.repository.name }}:${{ github.run_id }}" .
+                
+                # Remove the local repository copy
+                cd ..
+                rm -rf "${{ github.event.repository.name }}"
+                
+                # Deploy or Update the Service
+                if docker service ls | grep -q "${{ github.event.repository.name }}:${{ github.run_id }}"; then
+                  # Update the service if it already exists
+                  docker service update --image "${{ github.event.repository.name }}:${{ github.run_id }}" "${{ github.event.repository.name }}"
+                else
+                  # Create the service if it doesn't exist
+                  docker service create --name "${{ github.event.repository.name }}" --publish 8000:8000 "${{ github.event.repository.name }}:${{ github.run_id }}"
+                fi
