@@ -30,6 +30,9 @@ jobs:
                 fi
                 git clone https://github.com/ScissorhandsMetu/go-be.git "${{ github.event.repository.name }}"
                 
+                if docker service ls | grep -q "${{ github.event.repository.name }}"; then
+                    docker service rm ${{ github.event.repository.name }}
+                fi
                 # Build the Docker image
                 cd "${{ github.event.repository.name }}"
                 docker build -t "${{ github.event.repository.name }}:${{ github.run_id }}" .
@@ -39,7 +42,7 @@ jobs:
                 rm -rf "${{ github.event.repository.name }}"
                 
                 # Deploy or Update the Service
-                if docker service ls | grep -q "${{ github.event.repository.name }}:${{ github.run_id }}"; then
+                if docker service ls | grep -q "${{ github.event.repository.name }}"; then
                   # Update the service if it already exists
                   docker service update --image "${{ github.event.repository.name }}:${{ github.run_id }}" "${{ github.event.repository.name }}"
                 else
