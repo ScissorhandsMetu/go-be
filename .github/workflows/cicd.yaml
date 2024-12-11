@@ -28,7 +28,7 @@ jobs:
                 if [ -d "${{ github.event.repository.name }}" ]; then
                   rm -rf "${{ github.event.repository.name }}"
                 fi
-                git clone https://github.com/${{ github.event.repository.name }} "${{ github.event.repository.name }}"
+                git clone https://github.com/ScissorhandsMetu/go-be.git "${{ github.event.repository.name }}"
                 
                 # Build the Docker image
                 cd "${{ github.event.repository.name }}"
