@@ -25,8 +25,8 @@ jobs:
                 
                 # Pull the repository
                 cd $WORK_DIR
-                if [ -d "${{ github.event.repository.name }}" ]; then
-                  rm -rf "${{ github.event.repository.name }}"
+                if [ -d "go-be" ]; then
+                  rm -rf "go-be"
                 fi
                 git clone https://github.com/ScissorhandsMetu/go-be.git "${{ github.event.repository.name }}"
                 
