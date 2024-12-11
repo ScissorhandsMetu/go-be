@@ -44,8 +44,8 @@ jobs:
                 # Deploy or Update the Service
                 if docker service ls | grep -q "${{ github.event.repository.name }}"; then
                   # Update the service if it already exists
-                  docker service update --image "${{ github.event.repository.name }}:${{ github.run_id }}" "${{ github.event.repository.name }}"
+                  docker service update --with-registry-auth --image "${{ github.event.repository.name }}:${{ github.run_id }}" "${{ github.event.repository.name }}"
                 else
                   # Create the service if it doesn't exist
-                  docker service create --name "${{ github.event.repository.name }}" --publish 8000:8000 "${{ github.event.repository.name }}:${{ github.run_id }}"
+                  docker service create  --with-registry-auth --name "${{ github.event.repository.name }}" --publish 8000:8000 "${{ github.event.repository.name }}:${{ github.run_id }}"
                 fi
