@@ -5,11 +5,18 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-
+	"regexp"
 	"github.com/ScissorhandsMetu/go-be/db"
 	"github.com/ScissorhandsMetu/go-be/models"
 	"github.com/gorilla/mux"
 )
+
+//to validate email format
+func isValidEmail(email string) bool {
+	emailRegex := `^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`
+	re := regexp.MustCompile(emailRegex)
+	return re.MatchString(email)
+}
 
 // CreateAppointment handles new appointment creation.
 func CreateAppointment(w http.ResponseWriter, r *http.Request) {
@@ -27,6 +34,12 @@ func CreateAppointment(w http.ResponseWriter, r *http.Request) {
 		dbAppointment.AppointmentDate == "" ||
 		dbAppointment.SlotTime == "" {
 		http.Error(w, "Missing required fields", http.StatusBadRequest)
+		return
+	}
+
+	// Validate email format
+	if !isValidEmail(dbAppointment.CustomerEmail) {
+		http.Error(w, "Invalid email format", http.StatusBadRequest)
 		return
 	}
 
