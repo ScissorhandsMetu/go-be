@@ -69,29 +69,43 @@ func CreateAppointment(w http.ResponseWriter, r *http.Request) {
 	// Calculate expiration time (current time + 10 minutes)
 	expirationTime := time.Now().Add(10 * time.Minute)
 
-	// Insert appointment into database
+	// Insert appointment into the database
 	query := `
-		INSERT INTO Appointments (barber_id, customer_name, customer_email, appointment_date, slot_time, status, token, verification_expires_at)
-		VALUES ($1, $2, $3, $4, $5, 'Unverified', $6, $7)
-		RETURNING id;
-	`
-	err = db.DB.QueryRow(query, dbAppointment.BarberID, dbAppointment.CustomerName, dbAppointment.CustomerEmail, dbAppointment.AppointmentDate, dbAppointment.SlotTime, token, expirationTime).Scan(&dbAppointment.ID)
+        INSERT INTO Appointments (barber_id, customer_name, customer_email, appointment_date, slot_time, status, verification_token, verification_expires)
+        VALUES ($1, $2, $3, $4, $5, 'Unverified', $6, $7)
+        RETURNING id, barber_id, appointment_date, slot_time;
+    `
+	err = db.DB.QueryRow(query, dbAppointment.BarberID, dbAppointment.CustomerName, dbAppointment.CustomerEmail, dbAppointment.AppointmentDate, dbAppointment.SlotTime, token, expirationTime).
+		Scan(&dbAppointment.ID, &dbAppointment.BarberID, &dbAppointment.AppointmentDate, &dbAppointment.SlotTime)
 	if err != nil {
 		log.Printf("Error inserting appointment: %v\n", err)
 		http.Error(w, "Failed to create appointment", http.StatusInternalServerError)
 		return
 	}
 
-	fmt.Println("sending e-mail")
+	// Fetch barber information
+	var barberName string
+	barberQuery := `
+        SELECT name FROM Barbers WHERE id = $1;
+    `
+	err = db.DB.QueryRow(barberQuery, dbAppointment.BarberID).Scan(&barberName)
+	if err != nil {
+		log.Printf("Error fetching barber information: %v\n", err)
+		http.Error(w, "Failed to fetch barber information", http.StatusInternalServerError)
+		return
+	}
+
 	// Send verification email
 	verificationLink := fmt.Sprintf("http://localhost:3001/verify?token=%s", token)
 	sendVerificationEmail(dbAppointment.CustomerEmail, verificationLink)
 
-	// Respond with success message
+	// Respond with success message (excluding client information)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message":     "Verification email sent",
-		"appointment": dbAppointment,
+		"message":          "Appointment created successfully",
+		"barber_name":      barberName,
+		"appointment_date": dbAppointment.AppointmentDate,
+		"slot_time":        dbAppointment.SlotTime,
 	})
 }
 
@@ -106,7 +120,7 @@ func VerifyAppointment(w http.ResponseWriter, r *http.Request) {
 	query := `
 		UPDATE Appointments
 		SET status = 'Confirmed'
-		WHERE token = $1 AND status = 'Unverified' AND verification_expires_at > NOW()
+		WHERE verification_token = $1 AND status = 'Unverified' AND verification_expires > NOW()
 		RETURNING id;
 	`
 
@@ -121,7 +135,8 @@ func VerifyAppointment(w http.ResponseWriter, r *http.Request) {
 	// Respond with success message
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "Appointment confirmed successfully",
+		"message":        "Appointment confirmed successfully",
+		"appointment_id": appointmentID,
 	})
 }
 func sendVerificationEmail(toEmail, verificationLink string) {
