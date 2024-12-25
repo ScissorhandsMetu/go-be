@@ -43,7 +43,7 @@ func CreateAppointment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
-
+	log.Println("Creating Appointment.")
 	if dbAppointment.BarberID == 0 ||
 		dbAppointment.CustomerName == "" ||
 		dbAppointment.CustomerEmail == "" ||
@@ -142,7 +142,7 @@ func VerifyAppointment(w http.ResponseWriter, r *http.Request) {
 func sendVerificationEmail(toEmail, verificationLink string) {
 	from := "thescissorhandsmetu@gmail.com"
 	password := "barbershop502"
-	smtpHost := "smtp.example.com"
+	smtpHost := "smtp.gmail.com"
 	smtpPort := "587"
 
 	message := []byte(fmt.Sprintf(
@@ -154,7 +154,10 @@ func sendVerificationEmail(toEmail, verificationLink string) {
 	err := smtp.SendMail(smtpHost+":"+smtpPort, auth, from, []string{toEmail}, message)
 	if err != nil {
 		log.Printf("Error sending email: %v\n", err)
+		return
 	}
+	log.Println("Verification email sent successfully")
+
 }
 
 func UpdateAppointmentStatus(w http.ResponseWriter, r *http.Request) {
