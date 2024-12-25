@@ -9,6 +9,8 @@ import (
 
 var DB *sql.DB
 
+// host=34.142.51.130
+// host=localhost
 func Connect() {
 	var err error
 	connStr := "user=scissorhands_user password=securepassword dbname=scissorhands host=34.142.51.130 sslmode=disable"
