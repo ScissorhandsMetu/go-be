@@ -36,9 +36,9 @@ func GetBarbers(w http.ResponseWriter, r *http.Request) {
 
 		// Fetch appointments for this barber
 		appointmentsRows, err := db.DB.Query(`
-            SELECT appointment_date, slot_time
-            FROM Appointments
-            WHERE barber_id = $1
+            SELECT appointment_date, TO_CHAR(slot_time, 'HH24:MI:SS') AS slot_time
+			FROM Appointments
+			WHERE barber_id = $1
         `, barber.ID)
 		if err != nil {
 			log.Printf("Database query error for appointments: %v\n", err)
@@ -65,5 +65,6 @@ func GetBarbers(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(barbers)
+	log.Println(barbers)
 	log.Println("Barbers and appointment data sent successfully.")
 }
