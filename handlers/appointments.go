@@ -97,8 +97,13 @@ func CreateAppointment(w http.ResponseWriter, r *http.Request) {
 
 	// Send verification email
 	verificationLink := fmt.Sprintf("http://localhost:3001/verify?token=%s", token)
-	sendVerificationEmail(dbAppointment.CustomerEmail, verificationLink)
+	err = sendVerificationEmail(dbAppointment.CustomerEmail, verificationLink)
 
+	if err != nil {
+		log.Printf("Error sending e-mail: %v\n", err)
+		http.Error(w, "Failed to send e-mail", http.StatusInternalServerError)
+		return
+	}
 	// Respond with success message (excluding client information)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -139,7 +144,7 @@ func VerifyAppointment(w http.ResponseWriter, r *http.Request) {
 		"appointment_id": appointmentID,
 	})
 }
-func sendVerificationEmail(toEmail, verificationLink string) {
+func sendVerificationEmail(toEmail, verificationLink string) error {
 	from := "thescissorhandsmetu@gmail.com"
 	password := "barbershop502"
 	smtpHost := "smtp.gmail.com"
@@ -154,10 +159,10 @@ func sendVerificationEmail(toEmail, verificationLink string) {
 	err := smtp.SendMail(smtpHost+":"+smtpPort, auth, from, []string{toEmail}, message)
 	if err != nil {
 		log.Printf("Error sending email: %v\n", err)
-		return
+		return err
 	}
 	log.Println("Verification email sent successfully")
-
+	return nil
 }
 
 func UpdateAppointmentStatus(w http.ResponseWriter, r *http.Request) {
