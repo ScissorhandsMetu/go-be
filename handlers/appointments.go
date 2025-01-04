@@ -52,7 +52,7 @@ func CreateAppointment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Missing required fields", http.StatusBadRequest)
 		return
 	}
-
+	fmt.Println("I am here 1")
 	// Validate email format
 	if !isValidEmail(dbAppointment.CustomerEmail) {
 		http.Error(w, "Invalid email format", http.StatusBadRequest)
@@ -68,7 +68,7 @@ func CreateAppointment(w http.ResponseWriter, r *http.Request) {
 
 	// Calculate expiration time (current time + 10 minutes)
 	expirationTime := time.Now().Add(10 * time.Minute)
-
+	fmt.Println("I am here 2")
 	// Insert appointment into the database
 	query := `
         INSERT INTO Appointments (barber_id, customer_name, customer_email, appointment_date, slot_time, status, verification_token, verification_expires)
@@ -82,7 +82,7 @@ func CreateAppointment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to create appointment", http.StatusInternalServerError)
 		return
 	}
-
+	fmt.Println("I am here 3")
 	// Fetch barber information
 	var barberName string
 	barberQuery := `
@@ -94,7 +94,7 @@ func CreateAppointment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to fetch barber information", http.StatusInternalServerError)
 		return
 	}
-
+	fmt.Println("I am here 4")
 	// Send verification email
 	verificationLink := fmt.Sprintf("http://localhost:3001/verify?token=%s", token)
 	err = sendVerificationEmail(dbAppointment.CustomerEmail, verificationLink)
