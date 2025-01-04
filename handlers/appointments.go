@@ -2,19 +2,18 @@ package handlers
 
 import (
 	"crypto/rand"
-	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
-	"net/smtp"
 	"strconv"
 	"time"
 
 	"github.com/ScissorhandsMetu/go-be/db"
 	"github.com/ScissorhandsMetu/go-be/models"
 	"github.com/gorilla/mux"
+	"github.com/resendlabs/resend-go"
 )
 
 // generateToken creates a random token for email verification.
@@ -151,78 +150,30 @@ func VerifyAppointment(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[END] Appointment verification completed in %s\n", time.Since(startTime))
 }
 
+// sendVerificationEmail sends an email with a verification link using Resend.
 func sendVerificationEmail(toEmail, verificationLink string) error {
-	from := "thescissorhandsmetu@gmail.com"
-	password := "barbershop502"
-	smtpHost := "smtp.gmail.com"
-	smtpPort := "587"
+	// API Key from Resend (replace with your real key from environment variables)
+	apiKey := "re_EhNuxycr_N3XFpmQWstcSYG59hTvAbg6f"
 
-	message := []byte(fmt.Sprintf(
-		"Subject: Appointment Verification\n\nPlease click the link to confirm your appointment: %s",
-		verificationLink,
-	))
+	// Initialize Resend client
+	client := resend.NewClient(apiKey)
 
-	auth := smtp.PlainAuth("", from, password, smtpHost)
-
-	// Custom TLS configuration to skip certificate verification (Temporary Fix)
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: true, // Disable SSL certificate validation
-		ServerName:         smtpHost,
+	// Define the email parameters
+	params := &resend.SendEmailRequest{
+		From:    "ScissorHands <no-reply@scissorhands.com>",
+		To:      []string{toEmail},
+		Html:    fmt.Sprintf("<p>Please click the link to confirm your appointment:</p><a href='%s'>Verify Appointment</a>", verificationLink),
+		Subject: "Appointment Verification - ScissorHands",
 	}
 
-	// Establish a connection to the SMTP server
-	conn, err := tls.Dial("tcp", smtpHost+":"+smtpPort, tlsConfig)
+	// Send the email
+	sent, err := client.Emails.Send(params)
 	if err != nil {
-		log.Printf("[ERROR] Failed to establish TLS connection: %v\n", err)
-		return err
-	}
-	defer conn.Close()
-
-	// Create SMTP client
-	client, err := smtp.NewClient(conn, smtpHost)
-	if err != nil {
-		log.Printf("[ERROR] Failed to create SMTP client: %v\n", err)
-		return err
-	}
-	defer client.Close()
-
-	// Authenticate
-	if err = client.Auth(auth); err != nil {
-		log.Printf("[ERROR] Failed to authenticate: %v\n", err)
+		log.Printf("[ERROR] Failed to send verification email via Resend: %v\n", err)
 		return err
 	}
 
-	// Set the sender and recipient
-	if err = client.Mail(from); err != nil {
-		log.Printf("[ERROR] Failed to set sender: %v\n", err)
-		return err
-	}
-	if err = client.Rcpt(toEmail); err != nil {
-		log.Printf("[ERROR] Failed to set recipient: %v\n", err)
-		return err
-	}
-
-	// Write the email body
-	wc, err := client.Data()
-	if err != nil {
-		log.Printf("[ERROR] Failed to get writer: %v\n", err)
-		return err
-	}
-	defer wc.Close()
-
-	_, err = wc.Write(message)
-	if err != nil {
-		log.Printf("[ERROR] Failed to write message: %v\n", err)
-		return err
-	}
-
-	// Quit SMTP session
-	if err = client.Quit(); err != nil {
-		log.Printf("[ERROR] Failed to close SMTP session: %v\n", err)
-		return err
-	}
-
-	log.Printf("[INFO] Verification email successfully sent to %s\n", toEmail)
+	log.Printf("[INFO] Verification email successfully sent to %s via Resend. Email ID: %s\n", toEmail, sent.Id)
 	return nil
 }
 
