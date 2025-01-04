@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"crypto/rand"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -150,7 +151,6 @@ func VerifyAppointment(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[END] Appointment verification completed in %s\n", time.Since(startTime))
 }
 
-// sendVerificationEmail sends an email with a verification link.
 func sendVerificationEmail(toEmail, verificationLink string) error {
 	from := "thescissorhandsmetu@gmail.com"
 	password := "barbershop502"
@@ -163,9 +163,62 @@ func sendVerificationEmail(toEmail, verificationLink string) error {
 	))
 
 	auth := smtp.PlainAuth("", from, password, smtpHost)
-	err := smtp.SendMail(smtpHost+":"+smtpPort, auth, from, []string{toEmail}, message)
+
+	// Custom TLS configuration to skip certificate verification (Temporary Fix)
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: true, // Disable SSL certificate validation
+		ServerName:         smtpHost,
+	}
+
+	// Establish a connection to the SMTP server
+	conn, err := tls.Dial("tcp", smtpHost+":"+smtpPort, tlsConfig)
 	if err != nil {
-		log.Printf("[ERROR] Failed to send verification email: %v\n", err)
+		log.Printf("[ERROR] Failed to establish TLS connection: %v\n", err)
+		return err
+	}
+	defer conn.Close()
+
+	// Create SMTP client
+	client, err := smtp.NewClient(conn, smtpHost)
+	if err != nil {
+		log.Printf("[ERROR] Failed to create SMTP client: %v\n", err)
+		return err
+	}
+	defer client.Close()
+
+	// Authenticate
+	if err = client.Auth(auth); err != nil {
+		log.Printf("[ERROR] Failed to authenticate: %v\n", err)
+		return err
+	}
+
+	// Set the sender and recipient
+	if err = client.Mail(from); err != nil {
+		log.Printf("[ERROR] Failed to set sender: %v\n", err)
+		return err
+	}
+	if err = client.Rcpt(toEmail); err != nil {
+		log.Printf("[ERROR] Failed to set recipient: %v\n", err)
+		return err
+	}
+
+	// Write the email body
+	wc, err := client.Data()
+	if err != nil {
+		log.Printf("[ERROR] Failed to get writer: %v\n", err)
+		return err
+	}
+	defer wc.Close()
+
+	_, err = wc.Write(message)
+	if err != nil {
+		log.Printf("[ERROR] Failed to write message: %v\n", err)
+		return err
+	}
+
+	// Quit SMTP session
+	if err = client.Quit(); err != nil {
+		log.Printf("[ERROR] Failed to close SMTP session: %v\n", err)
 		return err
 	}
 
