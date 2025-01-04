@@ -2,11 +2,11 @@ package handlers
 
 import (
 	"crypto/rand"
-	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/smtp"
 	"strconv"
@@ -165,13 +165,13 @@ func sendVerificationEmail(toEmail, verificationLink string) error {
 	auth := smtp.PlainAuth("", from, password, smtpHost)
 
 	// Custom TLS configuration to skip certificate verification (Temporary Fix)
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: true, // Disable SSL certificate validation
-		ServerName:         smtpHost,
-	}
+	// tlsConfig := &tls.Config{
+	// 	InsecureSkipVerify: true, // Disable SSL certificate validation
+	// 	ServerName:         smtpHost,
+	// }
 
 	// Establish a connection to the SMTP server
-	conn, err := tls.Dial("tcp", smtpHost+":"+smtpPort, tlsConfig)
+	conn, err := net.Dial("tcp", smtpHost+":"+smtpPort)
 	if err != nil {
 		log.Printf("[ERROR] Failed to establish TLS connection: %v\n", err)
 		return err
