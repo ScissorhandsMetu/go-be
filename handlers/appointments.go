@@ -152,7 +152,7 @@ func VerifyAppointment(w http.ResponseWriter, r *http.Request) {
 
 func sendVerificationEmail(toEmail, verificationLink string) error {
 	from := "thescissorhandsmetu@gmail.com"
-	password := "barbershop502"
+	password := "bgsa jxkk ewzx wztm"
 	smtpHost := "smtp.gmail.com"
 	smtpPort := "587"
 
