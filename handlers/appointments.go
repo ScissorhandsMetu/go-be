@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"net/smtp"
-	"regexp"
 	"strconv"
 	"time"
 
@@ -17,14 +16,7 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// to validate email format
-func isValidEmail(email string) bool {
-	emailRegex := `^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`
-	re := regexp.MustCompile(emailRegex)
-	return re.MatchString(email)
-}
-
-// to validate e-mail address
+// generateToken creates a random token for email verification.
 func generateToken() (string, error) {
 	b := make([]byte, 32)
 	_, err := rand.Read(b)
@@ -36,76 +28,79 @@ func generateToken() (string, error) {
 
 // CreateAppointment handles new appointment creation.
 func CreateAppointment(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
+	log.Printf("[START] Appointment creation initiated at %s\n", startTime.Format(time.RFC3339))
+
 	var dbAppointment models.DatabaseAppointment
 
 	// Parse JSON body into dbAppointment struct
 	if err := json.NewDecoder(r.Body).Decode(&dbAppointment); err != nil {
+		log.Printf("[ERROR] Failed to parse request body: %v\n", err)
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
-	log.Println("Creating Appointment.")
-	if dbAppointment.BarberID == 0 ||
-		dbAppointment.CustomerName == "" ||
-		dbAppointment.CustomerEmail == "" ||
-		dbAppointment.AppointmentDate == "" ||
-		dbAppointment.SlotTime == "" {
-		log.Println("Missing required fields")
-		http.Error(w, "Missing required fields", http.StatusBadRequest)
-		return
-	}
-	log.Println("I am here 1")
-	// Validate email format
-	if !isValidEmail(dbAppointment.CustomerEmail) {
-		http.Error(w, "Invalid email format", http.StatusBadRequest)
-		return
-	}
 
-	// Generate a unique token for the appointment
+	log.Printf("[INFO] Received Appointment Data: BarberID=%d, CustomerName=%s, CustomerEmail=%s, AppointmentDate=%s, SlotTime=%s\n",
+		dbAppointment.BarberID, dbAppointment.CustomerName, dbAppointment.CustomerEmail, dbAppointment.AppointmentDate, dbAppointment.SlotTime)
+
+	// Generate a unique token for verification
 	token, err := generateToken()
 	if err != nil {
+		log.Printf("[ERROR] Failed to generate verification token: %v\n", err)
 		http.Error(w, "Failed to generate verification token", http.StatusInternalServerError)
 		return
 	}
 
-	// Calculate expiration time (current time + 10 minutes)
+	// Set expiration time for token
 	expirationTime := time.Now().Add(10 * time.Minute)
-	log.Println("I am here 2")
+	log.Printf("[INFO] Token generated and expires at: %s\n", expirationTime.Format(time.RFC3339))
+
 	// Insert appointment into the database
 	query := `
-        INSERT INTO Appointments (barber_id, customer_name, customer_email, appointment_date, slot_time, status, verification_token, verification_expires)
-        VALUES ($1, $2, $3, $4, $5, 'Unverified', $6, $7)
-        RETURNING id, barber_id, appointment_date, slot_time;
-    `
-	err = db.DB.QueryRow(query, dbAppointment.BarberID, dbAppointment.CustomerName, dbAppointment.CustomerEmail, dbAppointment.AppointmentDate, dbAppointment.SlotTime, token, expirationTime).
-		Scan(&dbAppointment.ID, &dbAppointment.BarberID, &dbAppointment.AppointmentDate, &dbAppointment.SlotTime)
+		INSERT INTO Appointments (barber_id, customer_name, customer_email, appointment_date, slot_time, status, verification_token, verification_expires)
+		VALUES ($1, $2, $3, $4, $5, 'Unverified', $6, $7)
+		RETURNING id, barber_id, appointment_date, slot_time;
+	`
+	err = db.DB.QueryRow(
+		query,
+		dbAppointment.BarberID,
+		dbAppointment.CustomerName,
+		dbAppointment.CustomerEmail,
+		dbAppointment.AppointmentDate,
+		dbAppointment.SlotTime,
+		token,
+		expirationTime,
+	).Scan(&dbAppointment.ID, &dbAppointment.BarberID, &dbAppointment.AppointmentDate, &dbAppointment.SlotTime)
+
 	if err != nil {
-		log.Printf("Error inserting appointment: %v\n", err)
+		log.Printf("[ERROR] Failed to insert appointment into database: %v\n", err)
 		http.Error(w, "Failed to create appointment", http.StatusInternalServerError)
 		return
 	}
-	log.Println("I am here 3")
+
+	log.Printf("[SUCCESS] Appointment created with ID=%d for BarberID=%d at %s\n", dbAppointment.ID, dbAppointment.BarberID, dbAppointment.AppointmentDate)
+
 	// Fetch barber information
 	var barberName string
-	barberQuery := `
-        SELECT name FROM Barbers WHERE id = $1;
-    `
+	barberQuery := `SELECT name FROM Barbers WHERE id = $1;`
 	err = db.DB.QueryRow(barberQuery, dbAppointment.BarberID).Scan(&barberName)
 	if err != nil {
-		log.Printf("Error fetching barber information: %v\n", err)
+		log.Printf("[ERROR] Failed to fetch barber information: %v\n", err)
 		http.Error(w, "Failed to fetch barber information", http.StatusInternalServerError)
 		return
 	}
-	log.Println("I am here 4")
+	log.Printf("[INFO] Barber Name fetched: %s\n", barberName)
+
 	// Send verification email
 	verificationLink := fmt.Sprintf("http://localhost:3001/verify?token=%s", token)
-	err = sendVerificationEmail(dbAppointment.CustomerEmail, verificationLink)
-
-	if err != nil {
-		log.Printf("Error sending e-mail: %v\n", err)
-		http.Error(w, "Failed to send e-mail", http.StatusInternalServerError)
+	if err := sendVerificationEmail(dbAppointment.CustomerEmail, verificationLink); err != nil {
+		log.Printf("[ERROR] Failed to send verification email: %v\n", err)
+		http.Error(w, "Failed to send verification email", http.StatusInternalServerError)
 		return
 	}
-	// Respond with success message (excluding client information)
+	log.Printf("[INFO] Verification email sent to: %s\n", dbAppointment.CustomerEmail)
+
+	// Respond with success
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"message":          "Appointment created successfully",
@@ -113,16 +108,22 @@ func CreateAppointment(w http.ResponseWriter, r *http.Request) {
 		"appointment_date": dbAppointment.AppointmentDate,
 		"slot_time":        dbAppointment.SlotTime,
 	})
+
+	log.Printf("[END] Appointment flow completed successfully in %s\n", time.Since(startTime))
 }
 
+// VerifyAppointment handles appointment verification.
 func VerifyAppointment(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
+	log.Printf("[START] Appointment verification initiated at %s\n", startTime.Format(time.RFC3339))
+
 	token := r.URL.Query().Get("token")
 	if token == "" {
+		log.Printf("[ERROR] Missing verification token in request\n")
 		http.Error(w, "Missing token", http.StatusBadRequest)
 		return
 	}
 
-	// Query to check token and expiration time
 	query := `
 		UPDATE Appointments
 		SET status = 'Confirmed'
@@ -133,18 +134,23 @@ func VerifyAppointment(w http.ResponseWriter, r *http.Request) {
 	var appointmentID int
 	err := db.DB.QueryRow(query, token).Scan(&appointmentID)
 	if err != nil {
-		log.Printf("Error verifying appointment: %v\n", err)
+		log.Printf("[ERROR] Failed to verify appointment: %v\n", err)
 		http.Error(w, "Invalid or expired token", http.StatusNotFound)
 		return
 	}
 
-	// Respond with success message
+	log.Printf("[SUCCESS] Appointment with ID=%d successfully verified.\n", appointmentID)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"message":        "Appointment confirmed successfully",
 		"appointment_id": appointmentID,
 	})
+
+	log.Printf("[END] Appointment verification completed in %s\n", time.Since(startTime))
 }
+
+// sendVerificationEmail sends an email with a verification link.
 func sendVerificationEmail(toEmail, verificationLink string) error {
 	from := "thescissorhandsmetu@gmail.com"
 	password := "barbershop502"
@@ -159,31 +165,43 @@ func sendVerificationEmail(toEmail, verificationLink string) error {
 	auth := smtp.PlainAuth("", from, password, smtpHost)
 	err := smtp.SendMail(smtpHost+":"+smtpPort, auth, from, []string{toEmail}, message)
 	if err != nil {
-		log.Printf("Error sending email: %v\n", err)
+		log.Printf("[ERROR] Failed to send verification email: %v\n", err)
 		return err
 	}
-	log.Println("Verification email sent successfully")
+
+	log.Printf("[INFO] Verification email successfully sent to %s\n", toEmail)
 	return nil
 }
 
+// UpdateAppointmentStatus updates the status of an appointment.
 func UpdateAppointmentStatus(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
+	log.Printf("[START] UpdateAppointmentStatus initiated at %s\n", startTime.Format(time.RFC3339))
+
+	// Extract appointment ID from the URL
 	vars := mux.Vars(r)
 	appointmentIDStr := vars["id"]
 	appointmentID, err := strconv.Atoi(appointmentIDStr)
 	if err != nil {
+		log.Printf("[ERROR] Invalid appointment ID format: %v\n", err)
 		http.Error(w, "Invalid appointment ID", http.StatusBadRequest)
 		return
 	}
+	log.Printf("[INFO] Updating status for AppointmentID=%d\n", appointmentID)
 
+	// Parse the status from the request body
 	var requestData struct {
 		Status string `json:"status"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&requestData); err != nil {
+		log.Printf("[ERROR] Failed to decode request body: %v\n", err)
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
 
-	// Update status in the database
+	log.Printf("[INFO] Requested Status Update: AppointmentID=%d, NewStatus=%s\n", appointmentID, requestData.Status)
+
+	// Update appointment status in the database
 	query := `
 		UPDATE Appointments
 		SET status = $1
@@ -191,21 +209,33 @@ func UpdateAppointmentStatus(w http.ResponseWriter, r *http.Request) {
 	`
 	result, err := db.DB.Exec(query, requestData.Status, appointmentID)
 	if err != nil {
-		log.Printf("Error updating appointment status: %v\n", err)
-		http.Error(w, "Failed to update appointment", http.StatusInternalServerError)
+		log.Printf("[ERROR] Database error while updating status: %v\n", err)
+		http.Error(w, "Failed to update appointment status", http.StatusInternalServerError)
 		return
 	}
 
 	// Check if any rows were affected
-	rowsAffected, _ := result.RowsAffected()
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Printf("[ERROR] Failed to retrieve rows affected: %v\n", err)
+		http.Error(w, "Failed to verify update operation", http.StatusInternalServerError)
+		return
+	}
 	if rowsAffected == 0 {
+		log.Printf("[ERROR] AppointmentID=%d not found in database\n", appointmentID)
 		http.Error(w, "Appointment ID not found", http.StatusNotFound)
 		return
 	}
 
-	// Mock response instead of email notification
+	log.Printf("[SUCCESS] AppointmentID=%d successfully updated to Status=%s\n", appointmentID, requestData.Status)
+
+	// Respond with a success message
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "Appointment status updated successfully",
+		"message":       "Appointment status updated successfully",
+		"appointmentID": appointmentID,
+		"status":        requestData.Status,
 	})
+
+	log.Printf("[END] UpdateAppointmentStatus completed in %s\n", time.Since(startTime))
 }
