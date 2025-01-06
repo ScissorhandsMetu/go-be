@@ -141,11 +141,28 @@ func VerifyAppointment(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[SUCCESS] Appointment with ID=%d successfully verified.\n", appointmentID)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message":        "Appointment confirmed successfully",
-		"appointment_id": appointmentID,
-	})
+	// Set the response content type to HTML
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	// HTML response with confirmation message
+	htmlResponse := fmt.Sprintf(`
+	<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Appointment Confirmation</title>
+	</head>
+	<body>
+		<h1>Your Appointment Has Been Confirmed!</h1>
+		<p>Thank you for confirming your appointment. Your appointment ID is: <strong>%d</strong>.</p>
+		<p>We look forward to seeing you at your scheduled time.</p>
+		<p><a href="/">Go back to the homepage</a></p>
+	</body>
+	</html>`, appointmentID)
+
+	// to the client
+	w.Write([]byte(htmlResponse))
 
 	log.Printf("[END] Appointment verification completed in %s\n", time.Since(startTime))
 }
