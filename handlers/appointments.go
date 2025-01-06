@@ -126,7 +126,7 @@ func VerifyAppointment(w http.ResponseWriter, r *http.Request) {
 
 	query := `
 		UPDATE Appointments
-		SET status = 'Confirmed'
+		SET status = 'Accepted'
 		WHERE verification_token = $1 AND status = 'Unverified' AND verification_expires > NOW()
 		RETURNING id;
 	`
