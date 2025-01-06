@@ -92,7 +92,7 @@ func CreateAppointment(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[INFO] Barber Name fetched: %s\n", barberName)
 
 	// Send verification email
-	verificationLink := fmt.Sprintf("http://localhost:3001/verify?token=%s", token)
+	verificationLink := fmt.Sprintf("http://34.142.51.130:8080/verify?token=%s", token)
 	if err := sendVerificationEmail(dbAppointment.CustomerEmail, verificationLink); err != nil {
 		log.Printf("[ERROR] Failed to send verification email: %v\n", err)
 		http.Error(w, "Failed to send verification email", http.StatusInternalServerError)
