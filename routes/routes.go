@@ -12,4 +12,5 @@ func RegisterRoutes(router *mux.Router) {
 	router.HandleFunc("/appointments/{id}/status", handlers.UpdateAppointmentStatus).Methods("PUT")
 	router.HandleFunc("/verify", handlers.VerifyAppointment).Methods("GET")
 	router.HandleFunc("/districts", handlers.GetDistricts).Methods("GET") // Added route for districts
+	router.HandleFunc("/appointments/cancel", handlers.CancelAppointment).Methods("DELETE")
 }
