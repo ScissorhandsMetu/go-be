@@ -20,7 +20,12 @@ func main() {
 	routes.RegisterRoutes(router)
 
 	// Enable CORS
-	handler := cors.Default().Handler(router)
+	//handler := cors.Default().Handler(router)
+	handler := cors.New(cors.Options{
+		AllowedOrigins: []string{"http://34.142.51.130:3000"}, // Allow only your frontend domain
+		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "UPDATE", "OPTIONS"},
+		AllowedHeaders: []string{"Content-Type", "Authorization"},
+	}).Handler(router)
 
 	// Start server
 	log.Println("Server starting on port 8080...")
