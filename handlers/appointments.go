@@ -254,3 +254,63 @@ func UpdateAppointmentStatus(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[END] UpdateAppointmentStatus completed in %s\n", time.Since(startTime))
 }
+
+// NEW: CancelAppointment Handler
+func CancelAppointment(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
+	log.Printf("[START] CancelAppointment initiated at %s\n", startTime.Format(time.RFC3339))
+
+	// Parse appointment ID from the request body
+	var requestData struct {
+		AppointmentID int `json:"appointment_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&requestData); err != nil {
+		log.Printf("[ERROR] Failed to decode request body: %v\n", err)
+		http.Error(w, "Invalid input", http.StatusBadRequest)
+		return
+	}
+
+	// Validate appointment ID
+	if requestData.AppointmentID <= 0 {
+		log.Printf("[ERROR] Invalid Appointment ID: %d\n", requestData.AppointmentID)
+		http.Error(w, "Invalid appointment ID", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("[INFO] Cancelling AppointmentID=%d\n", requestData.AppointmentID)
+
+	// Update the status in the database
+	query := `
+	DELETE FROM Appointments WHERE id = $1;
+	`
+	result, err := db.DB.Exec(query, requestData.AppointmentID)
+	if err != nil {
+		log.Printf("[ERROR] Database error while cancelling appointment: %v\n", err)
+		http.Error(w, "Failed to cancel appointment", http.StatusInternalServerError)
+		return
+	}
+
+	// Check if any rows were affected
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Printf("[ERROR] Failed to retrieve rows affected: %v\n", err)
+		http.Error(w, "Failed to verify cancellation", http.StatusInternalServerError)
+		return
+	}
+	if rowsAffected == 0 {
+		log.Printf("[ERROR] AppointmentID=%d not found or already canceled\n", requestData.AppointmentID)
+		http.Error(w, "Appointment not found or already canceled", http.StatusNotFound)
+		return
+	}
+
+	log.Printf("[SUCCESS] AppointmentID=%d successfully canceled\n", requestData.AppointmentID)
+
+	// Respond with a success message
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":       "Appointment canceled successfully",
+		"appointmentID": requestData.AppointmentID,
+	})
+
+	log.Printf("[END] CancelAppointment completed in %s\n", time.Since(startTime))
+}
